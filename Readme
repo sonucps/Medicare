@@ -1,0 +1,53 @@
+# 💊 E-MEDS: Smart Medicine Delivery & Management System
+
+### 🏫 Vellore Institute of Technology, Chennai  
+**Developed by:** Sonu Raj, Raushan Raj, Harsh Gupta  
+**Guide:** [Faculty Name]  
+
+---
+
+## 🧠 Overview
+E-MEDS is a **web-based smart medicine delivery and management system** designed to optimize pharmacy order handling using **process scheduling algorithms** and **interactive map integration**.  
+
+It integrates **FCFS, SJF, and Priority Scheduling** to manage customer medicine orders efficiently.  
+The system also allows users to **locate nearby pharmacies** using an interactive **map interface** powered by **LeafletJS** and **OpenStreetMap**.
+
+---
+
+## 🚀 Features
+
+- 👩‍⚕️ **Customer Portal** — Place and track medicine orders online  
+- 🧾 **Receptionist Dashboard** — View, manage, and schedule orders  
+- 🧑‍💼 **Admin Panel** — Manage medicines, users, and delivery data  
+- ⚙️ **Process Scheduling Algorithms**
+  - **FCFS (First Come First Serve)** — Sequential order processing  
+  - **SJF (Shortest Job First)** — Prioritizes small medicine requests  
+  - **Priority Scheduling** — Handles emergency orders instantly  
+- 🗺️ **Smart Map Integration**
+  - Detects user’s live location  
+  - Displays nearby pharmacies (e.g., Apollo Pharmacy @ VIT Campus)
+- 📦 **Real-time Order Simulation** — “Packing → Dispatch → Delivered” status updates  
+
+---
+
+## 🧰 Tech Stack
+
+| Layer | Technology Used |
+|:------|:----------------|
+| **Frontend** | HTML, CSS, JavaScript |
+| **Backend** | PHP |
+| **Database** | MySQL |
+| **Mapping API** | LeafletJS + OpenStreetMap |
+| **Server** | XAMPP (Apache + MySQL) |
+| **Version Control** | Git & GitHub |
+
+---
+
+## 🧮 Scheduling Algorithm Implementation (JavaScript)
+```js
+orders.sort((a, b) => {
+  if (a.priority !== b.priority) return a.priority - b.priority;
+  if (a.priority === 0) return a.arrival - b.arrival; // Emergency → FCFS
+  if (a.totalQty !== b.totalQty) return a.totalQty - b.totalQty; // SJF tie-breaker
+  return a.arrival - b.arrival;
+});
