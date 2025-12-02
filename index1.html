@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Medicine Order Portal</title>
+<style>
+body {
+  background: linear-gradient(135deg, #00c6ff, #0072ff);
+  font-family: 'Segoe UI', sans-serif;
+  color: white;
+  text-align: center;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+.container {
+  background: rgba(255,255,255,0.15);
+  border-radius: 20px;
+  padding: 25px;
+  width: 90%;
+  max-width: 500px;
+  margin: 40px auto;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+}
+input, select, button {
+  width: 90%;
+  padding: 10px;
+  margin: 10px 0;
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+}
+input, select {
+  background: rgba(255, 255, 255, 0.9);
+  color: #333;
+}
+button {
+  background: #004aad;
+  color: white;
+  cursor: pointer;
+  transition: 0.3s;
+}
+button:hover {
+  background: #003680;
+}
+.medicine-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  width: 90%;
+  margin: 5px auto;
+}
+.medicine-item input {
+  width: 48%;
+}
+#orderList {
+  text-align: left;
+  margin-top: 15px;
+  font-size: 14px;
+}
+.success {
+  background: rgba(0, 255, 0, 0.3);
+  padding: 10px;
+  border-radius: 10px;
+}
+.order {
+  background: rgba(255,255,255,0.2);
+  margin: 10px auto;
+  border-radius: 10px;
+  padding: 10px;
+  width: 85%;
+}
+.emergency { border-left: 6px solid red; }
+.normal { border-left: 6px solid lime; }
+</style>
+</head>
+<body>
+
+<h1>💊 Medicine Order Portal</h1>
+
+<div class="container">
+  <h2>Place Your Order</h2>
+
+  <input type="text" id="name" placeholder="Your Name" required>
+  <input type="number" id="distance" placeholder="Distance (km)" min="1" required>
+
+  <select id="priority">
+    <option value="1">Normal</option>
+    <option value="0">Emergency</option>
+  </select>
+
+  <div id="medicineContainer">
+    <div class="medicine-item">
+      <input type="text" placeholder="Medicine Name" class="medName" required>
+      <input type="number" placeholder="Quantity" class="medQty" min="1" required>
+    </div>
+  </div>
+
+  <button type="button" onclick="addMedicineField()">+ Add Medicine</button>
+  <button type="button" onclick="placeOrder()">Place Order</button>
+
+  <p id="msg"></p>
+</div>
+
+<div class="container">
+  <h2>📦 Your Orders</h2>
+  <div id="orderList">No orders yet.</div>
+</div>
+
+<script>
+function addMedicineField() {
+  const div = document.createElement("div");
+  div.className = "medicine-item";
+  div.innerHTML = `
+    <input type="text" placeholder="Medicine Name" class="medName" required>
+    <input type="number" placeholder="Quantity" class="medQty" min="1" required>
+  `;
+  document.getElementById("medicineContainer").appendChild(div);
+}
+
+function placeOrder() {
+  const name = document.getElementById("name").value.trim();
+  const distance = parseInt(document.getElementById("distance").value);
+  const priority = parseInt(document.getElementById("priority").value);
+
+  if (!name || !distance || distance <= 0) {
+    alert("Please enter valid details!");
+    return;
+  }
+
+  const medNames = Array.from(document.querySelectorAll(".medName")).map(el => el.value.trim());
+  const medQtys = Array.from(document.querySelectorAll(".medQty")).map(el => parseInt(el.value));
+
+  if (medNames.some(n => !n) || medQtys.some(q => isNaN(q) || q <= 0)) {
+    alert("Please fill all medicine details correctly!");
+    return;
+  }
+
+  const medicines = medNames.map((n,i)=>({name:n, quantity:medQtys[i]}));
+  const totalQty = medQtys.reduce((a,b)=>a+b,0);
+
+  const order = {
+    name,
+    distance,
+    priority,
+    medicines: medicines,
+    totalQty,
+    status: "Queued 🕒",
+    arrival: Date.now()
+  };
+
+  let orders = JSON.parse(localStorage.getItem("orders")) || [];
+
+  if (priority === 0) {
+    orders.forEach(o=>{
+      if(o.status!=="Delivered ✅") o.status="Paused ⏸️ (Emergency incoming)";
+    });
+    orders.unshift(order);
+  } else {
+    orders.push(order);
+  }
+
+  localStorage.setItem("orders", JSON.stringify(orders));
+// --- Save order to database ---
+fetch("save_order.php", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(order)
+})
+.then(res => res.json())
+.then(data => {
+  if (data.status === "ok") {
+    console.log("Order saved to database, ID:", data.id);
+  } else {
+    console.error("DB save failed:", data);
+  }
+})
+.catch(err => console.error("Error saving to DB:", err));
+
+
+  document.getElementById("msg").innerHTML = `<div class='success'>✅ Order placed successfully!</div>`;
+  document.getElementById("medicineContainer").innerHTML = `
+    <div class="medicine-item">
+      <input type="text" placeholder="Medicine Name" class="medName" required>
+      <input type="number" placeholder="Quantity" class="medQty" min="1" required>
+    </div>`;
+  document.getElementById("distance").value = "";
+
+  renderOrders();
+}
+
+function renderOrders() {
+  const name = document.getElementById("name").value.trim();
+  const orders = JSON.parse(localStorage.getItem("orders")) || [];
+  const myOrders = orders.filter(o => !name || o.name.toLowerCase() === name.toLowerCase());
+  const list = document.getElementById("orderList");
+
+  if (myOrders.length === 0) {
+    list.innerHTML = "<p>No orders found.</p>";
+    return;
+  }
+
+  list.innerHTML = myOrders.map(o => `
+    <div class="order ${o.priority==0?'emergency':'normal'}">
+      <b>${o.name}</b> — ${o.priority==0?"Emergency":"Normal"}<br>
+      ${o.medicines.map(m=>`${m.name} (x${m.quantity})`).join(", ")}<br>
+      Distance: ${o.distance} km<br>
+      <b>Status:</b> ${o.status}
+    </div>
+  `).join("");
+}
+
+// Auto-refresh user’s orders every 2 seconds
+setInterval(renderOrders, 2000);
+</script>
+</body>
+</html>

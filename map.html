@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Nearby Health Services – VIT Chennai</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Font & Leaflet (no API key) -->
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+<script>
+// --- Default (hard-coded) pharmacies near VIT Chennai ---
+const CUSTOM_PLACES = [
+  // 👉 Replace lat/lng with exact values if you have them
+  { 
+    type: 'pharmacy',
+    name: 'Apollo Pharmacy (VIT Chennai Campus)',
+    lat: 12.8426, lng: 80.1536,                   // placeholder near campus
+    addr: 'VIT Chennai Campus, Kelambakkam'
+  },
+  {
+    type: 'pharmacy',
+    name: 'Apollo Pharmacy (Kelambakkam)',
+    lat: 12.8178, lng: 80.2240,                   // placeholder (Kelambakkam side)
+    addr: 'Kelambakkam'
+  },
+  {
+    type: 'pharmacy',
+    name: 'MedPlus (Vandalur–Kelambakkam Rd)',
+    lat: 12.8245, lng: 80.1845,                   // placeholder along VK road
+    addr: 'Vandalur–Kelambakkam Rd'
+  }
+];
+
+// Adds custom places matching currentType; returns how many were added
+function addCustomPlaces() {
+  let added = 0;
+  const r = +document.getElementById('radius').value;
+
+  CUSTOM_PLACES.filter(p => p.type === currentType).forEach(p => {
+    // skip if outside radius
+    const dist = distanceMeters(userPos.lat, userPos.lng, p.lat, p.lng);
+    if (dist > r) return;
+
+    const marker = L.marker([p.lat, p.lng], {
+      icon: L.divIcon({
+        className: 'poi-pin',
+        html: `<div style="
+          width:16px;height:16px;border-radius:50%;
+          background:${currentType==='pharmacy'?'#6cc091':currentType==='hospital'?'#ff6b6b':'#ffd166'};
+          border:3px solid #fff; box-shadow:0 2px 10px rgba(0,0,0,.35)"></div>`,
+        iconSize:[22,22], iconAnchor:[11,11]
+      })
+    }).addTo(map).bindPopup(`<strong>${p.name}</strong><br>${p.addr || ''}`);
+
+    markers.push(marker);
+
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="title">${p.name}</div>
+      <div class="muted">${p.addr || 'Address not available'}</div>
+      <div class="small">~ ${Math.round(dist)} m away</div>
+    `;
+    card.addEventListener('click', () => {
+      map.panTo([p.lat, p.lng]);
+      marker.openPopup();
+    });
+    listEl.appendChild(card);
+
+    added++;
+  });
+
+  return added;
+}
+</script>
+
+
+  <style>
+    :root{
+      --bg: #0f1222;
+      --fg: #eaeef7;
+      --muted: #aab3c5;
+      --accent: #5dd39e;
+      --accent-2:#6cc091;
+      --card: rgba(255,255,255,.08);
+      --glass: rgba(22,25,45,.55);
+      --shadow: 0 8px 30px rgba(0,0,0,.35);
+    }
+    *{box-sizing:border-box}
+    html, body {height:100%; margin:0; background:linear-gradient(120deg,#0e1326,#1a1f3d 60%,#0f1222)}
+    body {font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:var(--fg);}
+
+    /* Layout */
+    .wrap {position:relative; height:100%;}
+    #map {height:100%; width:100%}
+
+    /* Top bar */
+    .topbar{
+      position:absolute; inset:16px 16px auto 16px; z-index:1000;
+      display:flex; gap:12px; flex-wrap:wrap; align-items:center;
+      background:var(--glass); backdrop-filter: blur(10px);
+      border:1px solid rgba(255,255,255,.12); border-radius:16px; padding:10px 12px;
+      box-shadow: var(--shadow);
+    }
+    .brand{
+      font-weight:700; letter-spacing:.2px; display:flex; align-items:center; gap:10px;
+    }
+    .dot{width:10px; height:10px; border-radius:50%; background:var(--accent)}
+    .chip{
+      border:1px solid rgba(255,255,255,.16); background:rgba(255,255,255,.06);
+      color:var(--fg); padding:8px 10px; border-radius:12px; cursor:pointer; user-select:none;
+      transition:.2s transform ease, .2s background ease;
+      display:flex; align-items:center; gap:8px; font-weight:600;
+    }
+    .chip:hover{transform:translateY(-1px); background:rgba(255,255,255,.12)}
+    .chip.active{background:var(--accent); color:#0b1022; border-color:transparent}
+    .sep{width:1px; height:28px; background:rgba(255,255,255,.12)}
+    .control{
+      display:flex; align-items:center; gap:10px; padding:6px 10px; border-radius:12px;
+      background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    }
+    .control input[type="range"] { width:160px; }
+    .control label{color:var(--muted); font-size:13px}
+    .btn{cursor:pointer; padding:8px 12px; border-radius:12px; border:1px solid rgba(255,255,255,.16);
+      background:rgba(255,255,255,.06); color:var(--fg); font-weight:600}
+    .btn:hover{background:rgba(255,255,255,.12)}
+    .btn.primary{background:var(--accent); color:#0b1022; border-color:transparent}
+    .btn.primary:hover{filter:brightness(1.05)}
+    .toggle{display:flex; gap:8px}
+
+    /* Sidebar list */
+    .sidebar{
+      position:absolute; right:16px; top:90px; bottom:16px; z-index:1000;
+      width:320px; max-width:90vw;
+      background:var(--glass); border:1px solid rgba(255,255,255,.12); border-radius:16px; padding:12px;
+      box-shadow: var(--shadow); display:flex; flex-direction:column; gap:10px;
+    }
+    .search{
+      display:flex; align-items:center; gap:8px; padding:8px 10px;
+      background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+      border-radius:12px;
+    }
+    .search input{flex:1; background:transparent; border:none; outline:none; color:var(--fg); font-size:14px}
+    .list{overflow:auto; border-radius:12px}
+    .card{
+      background:var(--card); padding:10px 12px; border-radius:12px; margin-bottom:8px;
+      border:1px solid rgba(255,255,255,.08); cursor:pointer; transition:.15s transform ease;
+    }
+    .card:hover{transform:translateY(-1px)}
+    .title{font-weight:700; font-size:14px; margin-bottom:4px}
+    .muted{color:var(--muted); font-size:13px}
+    .small{font-size:12px; color:var(--muted)}
+    .status{
+      position:absolute; left:50%; transform:translateX(-50%); bottom:16px; z-index:1000;
+      background:rgba(22,25,45,.7); border:1px solid rgba(255,255,255,.12);
+      padding:8px 12px; border-radius:12px; font-size:13px; box-shadow: var(--shadow);
+    }
+
+    /* Leaflet tune */
+    .leaflet-control-attribution{background:rgba(0,0,0,.4)!important; color:#dbe7ff!important; border-radius:8px; padding:2px 6px!important}
+    .leaflet-popup-content-wrapper{border-radius:12px}
+    .leaflet-popup-tip{display:none}
+
+    /* Responsive */
+    @media (max-width: 900px){
+      .sidebar{position:fixed; right:10px; left:10px; top:auto; bottom:12px; height:40vh}
+    }
+    @media (max-width: 600px){
+      .topbar{left:10px; right:10px}
+      .chip{font-size:13px}
+      .control{font-size:13px}
+      .btn{font-size:13px}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div id="map"></div>
+
+    <!-- Top bar controls -->
+    <div class="topbar">
+      <div class="brand"><span class="dot"></span> <span>Nearby Health – VIT Chennai</span></div>
+
+      <div class="sep"></div>
+
+      <div id="chips" class="toggle">
+        <div class="chip active" data-type="pharmacy">Pharmacies</div>
+        <div class="chip" data-type="hospital">Hospitals</div>
+        <div class="chip" data-type="clinic">Clinics</div>
+      </div>
+
+      <div class="sep"></div>
+
+      <div class="control">
+        <label>Radius</label>
+        <input id="radius" type="range" min="500" max="5000" step="100" value="2000"/>
+        <span id="radiusVal" class="small">2000 m</span>
+      </div>
+
+      <button id="locate" class="btn">📍 Locate me</button>
+      <button id="searchBtn" class="btn primary">🔎 Find</button>
+
+      <div class="sep"></div>
+
+      <div class="control">
+        <label>Basemap</label>
+        <select id="basemap">
+          <option value="osm">OSM Standard</option>
+          <option value="dark">Carto Dark</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Sidebar: search + results -->
+    <aside class="sidebar">
+      <div class="search">
+        🔍
+        <input id="filter" type="text" placeholder="Filter results by name… (optional)" />
+      </div>
+      <div id="list" class="list"></div>
+    </aside>
+
+    <!-- Status toast -->
+    <div id="status" class="status">Loading map…</div>
+  </div>
+
+  <script>
+    // Center defaults to VIT Chennai
+    const FALLBACK = { lat: 12.8421, lng: 80.1539, label: 'VIT Chennai (fallback)' };
+
+    let map, baseOSM, baseDark, currentBase;
+    let userMarker, userPos = { lat: FALLBACK.lat, lng: FALLBACK.lng };
+    let circle, markers = [];
+    let currentType = 'pharmacy';
+    const statusEl = document.getElementById('status');
+    const listEl = document.getElementById('list');
+    const filterEl = document.getElementById('filter');
+
+    // Init map
+    map = L.map('map', { zoomControl: true }).setView([FALLBACK.lat, FALLBACK.lng], 14);
+
+    baseOSM = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+    baseDark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',{
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap &copy; CARTO'
+    });
+    currentBase = baseOSM;
+
+    function setStatus(t){ statusEl.textContent = t; }
+    function clearStatus(){ statusEl.textContent=''; }
+
+    function setUser(lat, lng, label='You are here'){
+      userPos = { lat, lng };
+      map.setView([lat, lng], 15);
+      if (userMarker) userMarker.remove();
+      userMarker = L.marker([lat, lng], {
+        title: label,
+        icon: L.divIcon({
+          className: 'user-pin',
+          html: `<div style="width:14px;height:14px;border-radius:50%;background:#5dd39e;border:3px solid #fff;box-shadow:0 0 0 3px rgba(93,211,158,.35)"></div>`,
+          iconSize: [20,20], iconAnchor:[10,10]
+        })
+      }).addTo(map).bindPopup(label).openPopup();
+
+      drawRadius();
+    }
+
+    function drawRadius(){
+      const r = +document.getElementById('radius').value;
+      if (circle) circle.remove();
+      circle = L.circle([userPos.lat, userPos.lng], {
+        radius: r,
+        color:'#5dd39e', weight:1, fill:true, fillOpacity:.08
+      }).addTo(map);
+    }
+
+    // Geolocate
+    async function locateMe(){
+      setStatus('Locating you… please allow location access.');
+      if (!navigator.geolocation) {
+        setStatus('Geolocation not supported — showing VIT Chennai.');
+        setUser(FALLBACK.lat, FALLBACK.lng, FALLBACK.label);
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        pos => { setUser(pos.coords.latitude, pos.coords.longitude); setStatus('Location acquired.'); setTimeout(clearStatus, 1200); },
+        err => { setStatus('Location blocked — showing VIT Chennai.'); setUser(FALLBACK.lat, FALLBACK.lng, FALLBACK.label); setTimeout(clearStatus, 1500); },
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+      );
+    }
+
+    // Overpass query
+    async function findPlaces(){
+      const r = +document.getElementById('radius').value;
+      setStatus(`Finding ${currentType}s within ${r} m…`);
+
+      // Clear previous
+      markers.forEach(m => m.remove());
+      markers = [];
+      listEl.innerHTML = '';
+// Show your default pharmacies immediately (inside radius)
+addCustomPlaces();
+
+      const q = `
+        [out:json][timeout:25];
+        (
+          node["amenity"="${currentType}"](around:${r},${userPos.lat},${userPos.lng});
+          way["amenity"="${currentType}"](around:${r},${userPos.lat},${userPos.lng});
+          relation["amenity"="${currentType}"](around:${r},${userPos.lat},${userPos.lng});
+        );
+        out center 50;
+      `;
+
+      try{
+        const res = await fetch('https://overpass-api.de/api/interpreter', {
+          method:'POST',
+          headers:{'Content-Type':'application/x-www-form-urlencoded'},
+          body: 'data=' + encodeURIComponent(q)
+        });
+        if(!res.ok) throw new Error('Network ' + res.status);
+        const data = await res.json();
+        const els = data.elements || [];
+
+        if(!els.length){
+  // If none from Overpass, keep your defaults and inform user
+  const already = addCustomPlaces();
+  setStatus(already
+    ? `Loaded ${already} default ${currentType}${already>1?'s':''}.`
+    : `No ${currentType}s found. Try increasing radius.`);
+  return;
+}
+
+
+        // Render list + markers
+        els.forEach((el, idx) => {
+          const lat = el.lat || (el.center && el.center.lat);
+          const lon = el.lon || (el.center && el.center.lon);
+          if (lat==null || lon==null) return;
+
+          const t = el.tags || {};
+          const name = t.name || (currentType.charAt(0).toUpperCase()+currentType.slice(1));
+          const addr = [t['addr:housenumber'], t['addr:street'], t['addr:city']].filter(Boolean).join(', ');
+          const popup = `<strong>${name}</strong>${addr?'<br>'+addr:''}`;
+
+          const marker = L.marker([lat, lon], {
+            icon: L.divIcon({
+              className: 'poi-pin',
+              html: `<div style="
+                width:16px;height:16px;border-radius:50%;
+                background:${currentType==='pharmacy'?'#6cc091':currentType==='hospital'?'#ff6b6b':'#ffd166'};
+                border:3px solid #fff; box-shadow:0 2px 10px rgba(0,0,0,.35)"></div>`,
+              iconSize:[22,22], iconAnchor:[11,11]
+            })
+          }).addTo(map).bindPopup(popup);
+
+          marker.on('click', () => {
+            map.panTo([lat, lon]);
+          });
+
+          markers.push(marker);
+
+          // Card
+          const card = document.createElement('div');
+          card.className = 'card';
+          card.innerHTML = `
+            <div class="title">${name}</div>
+            <div class="muted">${addr || 'Address not available'}</div>
+            <div class="small">~ ${ Math.round(distanceMeters(userPos.lat, userPos.lng, lat, lon)) } m away</div>
+          `;
+          card.addEventListener('click', () => {
+            map.panTo([lat, lon]);
+            marker.openPopup();
+          });
+          listEl.appendChild(card);
+        });
+
+        setStatus(`Found ${els.length} ${currentType}${els.length>1?'s':''}.`);
+        setTimeout(clearStatus, 1500);
+        applyFilter(); // apply current filter text
+      }catch(e){
+        console.error(e);
+        setStatus('Could not load places. Try again.');
+      }
+    }
+
+    // Helpers
+    function distanceMeters(lat1, lon1, lat2, lon2){
+      const R=6371000; // m
+      const toRad = d=>d*Math.PI/180;
+      const dLat=toRad(lat2-lat1), dLon=toRad(lon2-lon1);
+      const a=Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+      return 2*R*Math.asin(Math.sqrt(a));
+    }
+
+    function applyFilter(){
+      const q = filterEl.value.trim().toLowerCase();
+      const cards = Array.from(listEl.children);
+      let any = false;
+      cards.forEach((c,i)=>{
+        const t = c.querySelector('.title')?.textContent.toLowerCase() || '';
+        const ok = !q || t.includes(q);
+        c.style.display = ok ? '' : 'none';
+        if(ok) any = true;
+      });
+      if(!any) setStatus('No results match your filter.');
+    }
+
+    // UI wiring
+    document.getElementById('radius').addEventListener('input', e=>{
+      document.getElementById('radiusVal').textContent = e.target.value + ' m';
+      drawRadius();
+    });
+    document.getElementById('locate').addEventListener('click', locateMe);
+    document.getElementById('searchBtn').addEventListener('click', findPlaces);
+    filterEl.addEventListener('input', applyFilter);
+
+    document.getElementById('basemap').addEventListener('change', (e)=>{
+      const v = e.target.value;
+      if (currentBase) currentBase.remove();
+      currentBase = (v==='dark') ? baseDark : baseOSM;
+      currentBase.addTo(map);
+    });
+
+    document.getElementById('chips').addEventListener('click', (e)=>{
+      const el = e.target.closest('.chip');
+      if (!el) return;
+      document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+      el.classList.add('active');
+      currentType = el.dataset.type; // pharmacy | hospital | clinic
+      findPlaces();
+    });
+
+    // Initial state
+    setUser(FALLBACK.lat, FALLBACK.lng, FALLBACK.label);
+    locateMe();        // try to get real location
+    findPlaces();      // initial query
+  </script>
+</body>
+</html>
